@@ -1,2 +1,4 @@
 apt-get update
-cd /vagrant
+cd /vagrant/usloss
+./configure
+make install
