@@ -1,3 +1,13 @@
 Phase 1A TEMPORARY HACK: init() manually switching to PID 1.
-SIMULATOR TRAP: startup returned!
-
+Process 1 starting
+phase2_start_service_processes() called -- currently a NOP
+phase3_start_service_processes() called -- currently a NOP
+phase4_start_service_processes() called -- currently a NOP
+phase5_start_service_processes() called -- currently a NOP
+Process 2 starting
+testcase_main(): started
+EXPECTATION: Simple spork()/join() should complete.
+Phase 1A TEMPORARY HACK: Manually switching to the recently created XXp1()
+Process 3 starting
+XXp1(): started
+XXp1(): arg = 'XXp1'

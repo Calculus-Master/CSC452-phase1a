@@ -37,6 +37,11 @@ int do_testcase_main()
 
 int do_init()
 {
+    phase2_start_service_processes();
+    phase3_start_service_processes();
+    phase4_start_service_processes();
+    phase5_start_service_processes();
+
     int pid = spork("testcase_main", do_testcase_main, NULL, USLOSS_MIN_STACK, 3);
 
     TEMP_switchTo(pid);
@@ -47,7 +52,6 @@ int do_init()
 void process_wrapper()
 {
     USLOSS_PsrSet(USLOSS_PsrGet() | USLOSS_PSR_CURRENT_INT);
-    USLOSS_Console("Process %d starting\n", current_process->pid);
     int status = current_process->func(current_process->arg);
     quit_phase_1a(status, current_process->parent->pid);
 }
@@ -214,7 +218,7 @@ void TEMP_switchTo(int pid)
     
     Process* old = current_process;
     current_process = &process_table[pid % MAXPROC];
-    USLOSS_ContextSwitch(&(old->context), &(current_process->context));
+    USLOSS_ContextSwitch(pid == 1 ? NULL : &(old->context), &(current_process->context));
 
     // Restore interrupts
     USLOSS_PsrSet(old_psr);
