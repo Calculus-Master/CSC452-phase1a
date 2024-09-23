@@ -68,7 +68,7 @@ void phase1_init(void)
 
     memset(process_table, 0, sizeof(process_table));
 
-    current_process = &process_table[next_pid];
+    current_process = &process_table[next_pid % MAXPROC];
     current_process->pid = next_pid++;
     current_process->priority = 6;
     strcpy(current_process->name, "init");
@@ -213,7 +213,7 @@ void TEMP_switchTo(int pid)
     }
     
     Process* old = current_process;
-    current_process = &process_table[pid];
+    current_process = &process_table[pid % MAXPROC];
     USLOSS_ContextSwitch(&(old->context), &(current_process->context));
 
     // Restore interrupts
