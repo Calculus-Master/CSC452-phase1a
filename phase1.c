@@ -14,6 +14,7 @@ typedef struct Process {
     void* arg;
 
     struct Process* parent;
+    struct Process* next_sibling;
     struct Process* children;
     USLOSS_Context context;
 } Process;
@@ -46,8 +47,9 @@ int do_init()
 void process_wrapper()
 {
     USLOSS_PsrSet(USLOSS_PsrGet() | USLOSS_PSR_CURRENT_INT);
+    USLOSS_Console("Process %d starting\n", current_process->pid);
     int status = current_process->func(current_process->arg);
-    quit(status);
+    quit_phase_1a(status, current_process->parent->pid);
 }
 
 // Main phase 1 functions
@@ -70,12 +72,13 @@ void phase1_init(void)
     current_process->pid = next_pid++;
     current_process->priority = 6;
     strcpy(current_process->name, "init");
+
     current_process->stack = init_stack;
 
     current_process->func = do_init;
     current_process->arg = NULL;
 
-    USLOSS_ContextInit(&current_process->context, init_stack, USLOSS_MIN_STACK, NULL, process_wrapper);
+    USLOSS_ContextInit(&(current_process->context), init_stack, USLOSS_MIN_STACK, NULL, process_wrapper);
 
     // Restore interrupts
     USLOSS_PsrSet(old_psr);
@@ -94,6 +97,12 @@ int spork(char *name, int(*func)(void *), void *arg, int stacksize, int priority
         USLOSS_Halt(1);
     }
 
+    // Check parameters
+    if(stacksize < USLOSS_MIN_STACK) return -2; // Stack size too small
+    else if(name == NULL || func == NULL) return -1; // Name or function is NULL
+    else if(strlen(name) > MAXNAME) return -1; // Name too long
+    else if(priority < 1 || priority > 6) return -1; // Priority out of range
+
     int slot = next_pid % MAXPROC; //TODO: Cycle through until empty slot found, return -1 if not
     Process* new_process = &process_table[slot];
     memset(new_process, 0, sizeof(Process));
@@ -102,19 +111,14 @@ int spork(char *name, int(*func)(void *), void *arg, int stacksize, int priority
     new_process->priority = priority;
     strcpy(new_process->name, name);
 
-    if(stacksize < USLOSS_MIN_STACK) return -2; // Stack size too small
-    else if(name == NULL || func == NULL) return -1; // Name or function is NULL
-    else if(strlen(name) > MAXNAME) return -1; // Name too long
-    else if(priority < 1 || priority > 6) return -1; // Priority out of range
-
     new_process->stack = malloc(stacksize);
     new_process->func = func;
     new_process->arg = arg;
 
-    USLOSS_ContextInit(&new_process->context, new_process->stack, stacksize, NULL, process_wrapper); //TODO: check weird function pointer stuff
+    USLOSS_ContextInit(&(new_process->context), new_process->stack, stacksize, NULL, process_wrapper); //TODO: check weird function pointer stuff
 
     new_process->parent = current_process;
-    new_process->children = current_process->children;
+    new_process->next_sibling = current_process->children;
     current_process->children = new_process;
 
     // Restore interrupts
@@ -210,7 +214,7 @@ void TEMP_switchTo(int pid)
     
     Process* old = current_process;
     current_process = &process_table[pid];
-    USLOSS_ContextSwitch(&old->context, &current_process->context);
+    USLOSS_ContextSwitch(&(old->context), &(current_process->context));
 
     // Restore interrupts
     USLOSS_PsrSet(old_psr);
