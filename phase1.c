@@ -24,19 +24,23 @@ int next_pid = 1;
 char init_stack[USLOSS_MIN_STACK];
 
 // Process functions
-void do_testcase_main()
+int do_testcase_main()
 {
     testcase_main();
 
     USLOSS_Console("Phase 1A TEMPORARY HACK: testcase_main() returned, simulation will now halt.\n");
     USLOSS_Halt(0);
+
+    return 0;
 }
 
-void do_init()
+int do_init()
 {
     int pid = spork("testcase_main", do_testcase_main, NULL, USLOSS_MIN_STACK, 3);
 
     TEMP_switchTo(pid);
+
+    return 0;
 }
 
 void process_wrapper()
@@ -68,7 +72,10 @@ void phase1_init(void)
     strcpy(current_process->name, "init");
     current_process->stack = init_stack;
 
-    USLOSS_ContextInit(&current_process->context, init_stack, USLOSS_MIN_STACK, NULL, do_init);
+    current_process->func = do_init;
+    current_process->arg = NULL;
+
+    USLOSS_ContextInit(&current_process->context, init_stack, USLOSS_MIN_STACK, NULL, process_wrapper);
 
     // Restore interrupts
     USLOSS_PsrSet(old_psr);
@@ -101,6 +108,8 @@ int spork(char *name, int(*func)(void *), void *arg, int stacksize, int priority
     else if(priority < 1 || priority > 6) return -1; // Priority out of range
 
     new_process->stack = malloc(stacksize);
+    new_process->func = func;
+    new_process->arg = arg;
 
     USLOSS_ContextInit(&new_process->context, new_process->stack, stacksize, NULL, process_wrapper); //TODO: check weird function pointer stuff
 
@@ -110,6 +119,7 @@ int spork(char *name, int(*func)(void *), void *arg, int stacksize, int priority
 
     // Restore interrupts
     USLOSS_PsrSet(old_psr);
+    return new_process->pid;
 }
 
 int join(int *status)
