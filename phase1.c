@@ -6,7 +6,6 @@
 #define READY_STATE 0
 #define RUNNING_STATE 1
 #define TERMINATED_STATE 2
-#define JOIN_CLEANED_STATE 5
 
 typedef struct Process
 {
@@ -123,11 +122,10 @@ int spork(char *name, int (*func)(void *), void *arg, int stacksize, int priorit
         return -1; // Priority out of range
 
     // Cycle through available slots to find a free one
-    // Free: PID 0 or the state is JOIN_CLEANED_STATE or TERMINATED_STATE
-    if(next_pid == 51) dumpProcesses();
+    // Free: PID 0 or the state is TERMINATED_STATE
     int first_slot = next_pid % MAXPROC;
     Process* new_process = &process_table[next_pid % MAXPROC];
-    while(new_process->pid != 0 && new_process->state != JOIN_CLEANED_STATE && new_process->state != TERMINATED_STATE)
+    while(new_process->pid != 0 && new_process->state != TERMINATED_STATE)
     {
         next_pid++;
         if(next_pid % MAXPROC == first_slot)
@@ -178,32 +176,14 @@ int join(int *status)
     if (current_process->children == NULL)
         return -2;
 
-    // Check if all children have already been joined
-    Process *child = current_process->children;
-    int all_joined = 1;
-    while (child != NULL)
-    {
-        if (child->state != JOIN_CLEANED_STATE)
-        {
-            all_joined = 0;
-            break;
-        }
-        child = child->next_sibling;
-    }
-    if (all_joined)
-    {
-        return -2;
-    }
-
     // Iterate through children to find any dead processes
-    child = current_process->children;
+    Process* child = current_process->children;
     while (child != NULL)
     {
         if (child->state == TERMINATED_STATE)
         {
             // Store the status through the out-pointer
             *status = child->status;
-            //child->state = JOIN_CLEANED_STATE;
 
             // Remove the child from the parent's list
             if (child == current_process->children)
@@ -317,9 +297,6 @@ void dumpProcesses(void)
                     break;
                 case TERMINATED_STATE:
                     sprintf(state, "Terminated(%d)", proc->status);
-                    break;
-                case JOIN_CLEANED_STATE:
-                    strcpy(state, "Join Cleaned");
                     break;
                 default:
                     strcpy(state, "Unknown");
