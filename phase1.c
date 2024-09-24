@@ -5,9 +5,7 @@
 
 #define READY_STATE 0
 #define RUNNING_STATE 1
-#define JOIN_BLOCKED_STATE 2
-#define ZAP_BLOCKED_STATE 3
-#define TERMINATED_STATE 4
+#define TERMINATED_STATE 2
 #define JOIN_CLEANED_STATE 5
 
 typedef struct Process
@@ -25,6 +23,7 @@ typedef struct Process
     struct Process *parent;
     struct Process *next_sibling;
     struct Process *children;
+
     USLOSS_Context context;
 } Process;
 
@@ -86,6 +85,7 @@ void phase1_init(void)
     current_process = &process_table[next_pid % MAXPROC];
     current_process->pid = next_pid++;
     current_process->priority = 6;
+    current_process->state = READY_STATE;
     strcpy(current_process->name, "init");
 
     current_process->stack = init_stack;
@@ -122,11 +122,23 @@ int spork(char *name, int (*func)(void *), void *arg, int stacksize, int priorit
     else if (priority < 1 || priority > 6)
         return -1; // Priority out of range
 
-    int slot = next_pid % MAXPROC; // TODO: Cycle through until empty slot found, return -1 if not
-    Process *new_process = &process_table[slot];
-    memset(new_process, 0, sizeof(Process));
+    // Cycle through available slots to find a free one
+    // Free: PID 0 or the state is JOIN_CLEANED_STATE or TERMINATED_STATE
+    if(next_pid == 51) dumpProcesses();
+    int first_slot = next_pid % MAXPROC;
+    Process* new_process = &process_table[next_pid % MAXPROC];
+    while(new_process->pid != 0 && new_process->state != JOIN_CLEANED_STATE && new_process->state != TERMINATED_STATE)
+    {
+        next_pid++;
+        if(next_pid % MAXPROC == first_slot)
+            return -1; // No free slots
 
+        new_process = &process_table[next_pid % MAXPROC];
+    }
+
+    memset(new_process, 0, sizeof(Process));
     new_process->pid = next_pid++;
+    new_process->state = READY_STATE;
     new_process->priority = priority;
     strcpy(new_process->name, name);
 
@@ -134,7 +146,7 @@ int spork(char *name, int (*func)(void *), void *arg, int stacksize, int priorit
     new_process->func = func;
     new_process->arg = arg;
 
-    USLOSS_ContextInit(&(new_process->context), new_process->stack, stacksize, NULL, process_wrapper); // TODO: check weird function pointer stuff
+    USLOSS_ContextInit(&(new_process->context), new_process->stack, stacksize, NULL, process_wrapper);
 
     new_process->parent = current_process;
     new_process->next_sibling = current_process->children;
@@ -189,11 +201,9 @@ int join(int *status)
     {
         if (child->state == TERMINATED_STATE)
         {
-            // Found a dead child
-            int child_pid = child->pid;
-
-            *status = process_table[child_pid].status; // Store the status through the out-pointer
-            child->state = JOIN_CLEANED_STATE;
+            // Store the status through the out-pointer
+            *status = child->status;
+            //child->state = JOIN_CLEANED_STATE;
 
             // Remove the child from the parent's list
             if (child == current_process->children)
@@ -217,11 +227,8 @@ int join(int *status)
                 child->stack = NULL;
             }
 
-            // Mark the child as joined
-            child->state = JOIN_BLOCKED_STATE;
-
             // Return the child's PID
-            return child_pid;
+            return child->pid;
         }
         child = child->next_sibling;
     }
@@ -243,23 +250,16 @@ void quit_phase_1a(int status, int switchToPid)
         USLOSS_Halt(1);
     }
 
-    // Check if the current process has any children that haven't been joined
-    Process *child = current_process->children;
-    while (child != NULL)
+    // Check if the current process has any children
+    if(current_process->children != NULL)
     {
-        if (child->state != JOIN_CLEANED_STATE)
-        {
-            USLOSS_Console("ERROR: Process pid %d called quit() while it still had children.\n", current_process->pid);
-            USLOSS_Halt(1);
-        }
-        child = child->next_sibling;
+        USLOSS_Console("ERROR: Process pid %d called quit() while it still had children.\n", current_process->pid);
+        USLOSS_Halt(1);
     }
 
-    // status for this process stored in the process table entry
-    Process *current = current_process;
-    process_table[current->pid].status = status;
-
-    current->state = TERMINATED_STATE;
+    // Status for this process stored in the process table entry
+    current_process->status = status;
+    current_process->state = TERMINATED_STATE;
 
     TEMP_switchTo(switchToPid);
 
@@ -315,12 +315,6 @@ void dumpProcesses(void)
                 case RUNNING_STATE:
                     strcpy(state, "Running");
                     break;
-                case JOIN_BLOCKED_STATE:
-                    strcpy(state, "Join Blocked");
-                    break;
-                case ZAP_BLOCKED_STATE:
-                    strcpy(state, "Zap Blocked");
-                    break;
                 case TERMINATED_STATE:
                     sprintf(state, "Terminated(%d)", proc->status);
                     break;
@@ -331,7 +325,7 @@ void dumpProcesses(void)
                     strcpy(state, "Unknown");
             }
 
-            USLOSS_Console("%3d %5d  %-16s  %d         %s\n",
+            USLOSS_Console(" %3d %5d  %-16s  %d         %s\n",
                            proc->pid,
                            proc->parent ? proc->parent->pid : 0,
                            proc->name,
@@ -359,6 +353,11 @@ void TEMP_switchTo(int pid)
 
     Process *old = current_process;
     current_process = &process_table[pid % MAXPROC];
+
+    //Update states
+    if(pid != 1 && old->state != TERMINATED_STATE) old->state = READY_STATE;
+    current_process->state = RUNNING_STATE;
+
     USLOSS_ContextSwitch(pid == 1 ? NULL : &(old->context), &(current_process->context));
 
     // Restore interrupts
