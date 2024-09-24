@@ -85,7 +85,7 @@ void check_kernel_mode(const char *function_name)
 int disable_interrupts()
 {
     int old_psr = USLOSS_PsrGet();
-    USLOSS_PsrGet() & ~USLOSS_PSR_CURRENT_INT;
+    USLOSS_PsrSet(USLOSS_PsrGet() & ~USLOSS_PSR_CURRENT_INT);
     return old_psr;
 }
 
