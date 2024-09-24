@@ -125,7 +125,7 @@ int spork(char *name, int (*func)(void *), void *arg, int stacksize, int priorit
     // Free: PID 0 or the state is TERMINATED_STATE
     int first_slot = next_pid % MAXPROC;
     Process* new_process = &process_table[next_pid % MAXPROC];
-    while(new_process->pid != 0 && new_process->state != TERMINATED_STATE)
+    while(new_process->pid != 0)
     {
         next_pid++;
         if(next_pid % MAXPROC == first_slot)

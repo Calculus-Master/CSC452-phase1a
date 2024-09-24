@@ -55,18 +55,18 @@ Phase 1A TEMPORARY HACK: Manually switching to the recently created XXp1()
 Phase 1A TEMPORARY HACK: Manually switching to the recently created XXp1()
 Phase 1A TEMPORARY HACK: Manually switching to the recently created XXp1()
 Phase 1A TEMPORARY HACK: Manually switching to the recently created XXp1()
-Phase 1A TEMPORARY HACK: Manually switching to the recently created XXp1()
-Phase 1A TEMPORARY HACK: Manually switching to the recently created XXp1()
-Phase 1A TEMPORARY HACK: Manually switching to the recently created XXp1()
-Phase 1A TEMPORARY HACK: Manually switching to the recently created XXp1()
+testcase_main(): spork() failed: i=48, pid is -1.
+testcase_main(): spork() failed: i=49, pid is -1.
+testcase_main(): spork() failed: i=50, pid is -1.
+testcase_main(): spork() failed: i=51, pid is -1.
  PID  PPID  NAME              PRIORITY  STATE
   50     2  XXp1              2         Terminated(2)
    1     0  init              6         Runnable
    2     1  testcase_main     3         Running
-  53     2  XXp1              2         Terminated(2)
-  54     2  XXp1              2         Terminated(2)
-  55     2  XXp1              2         Terminated(2)
-  56     2  XXp1              2         Terminated(2)
+   3     2  XXp1              2         Terminated(2)
+   4     2  XXp1              2         Terminated(2)
+   5     2  XXp1              2         Terminated(2)
+   6     2  XXp1              2         Terminated(2)
    7     2  XXp1              2         Terminated(2)
    8     2  XXp1              2         Terminated(2)
    9     2  XXp1              2         Terminated(2)
@@ -111,6 +111,10 @@ Phase 1A TEMPORARY HACK: Manually switching to the recently created XXp1()
   48     2  XXp1              2         Terminated(2)
   49     2  XXp1              2         Terminated(2)
 testcase_main(): Calling join() on 52 processes.  The number of 'failed' calls here should be the same as the number of 'failed' spork() calls.
+testcase_main(): join() failed: i=48, pid is -2.
+testcase_main(): join() failed: i=49, pid is -2.
+testcase_main(): join() failed: i=50, pid is -2.
+testcase_main(): join() failed: i=51, pid is -2.
  PID  PPID  NAME              PRIORITY  STATE
    1     0  init              6         Runnable
    2     1  testcase_main     3         Running
