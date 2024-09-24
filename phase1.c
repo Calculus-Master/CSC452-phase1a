@@ -7,6 +7,14 @@
 #define RUNNING_STATE 1
 #define TERMINATED_STATE 2
 
+// Function name definitions
+#define PHASE1_INIT_NAME "phase1_init"
+#define SPORK_NAME "spork"
+#define JOIN_NAME "join"
+#define QUIT_NAME "quit_phase_1a"
+#define DUMP_PROCESSES_NAME "dumpProcesses"
+#define TEMP_SWITCH_TO_NAME "TEMP_switchTo"
+
 typedef struct Process
 {
     int pid;
@@ -49,7 +57,7 @@ int do_init()
     phase4_start_service_processes();
     phase5_start_service_processes();
 
-    USLOSS_Console("Phase 1A TEMPORARY HACK: init() manually switching to testcase_main() after using spork() to create it.\n");    
+    USLOSS_Console("Phase 1A TEMPORARY HACK: init() manually switching to testcase_main() after using spork() to create it.\n");
 
     int pid = spork("testcase_main", do_testcase_main, NULL, USLOSS_MIN_STACK, 3);
 
@@ -65,19 +73,28 @@ void process_wrapper()
     quit_phase_1a(status, current_process->parent->pid);
 }
 
+void check_kernel_mode(const char *function_name)
+{
+    if ((USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE) == 0)
+    {
+        USLOSS_Console("ERROR: Someone attempted to call %s while in user mode!\n", function_name);
+        USLOSS_Halt(1);
+    }
+}
+
+int disable_interrupts()
+{
+    int old_psr = USLOSS_PsrGet();
+    USLOSS_PsrGet() & ~USLOSS_PSR_CURRENT_INT;
+    return old_psr;
+}
+
 // Main phase 1 functions
 void phase1_init(void)
 {
-    // Checking kernel mode
-    if ((USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE) == 0)
-    {
-        USLOSS_Console("ERROR: Someone attempted to call phase1_init while in user mode!\n");
-        USLOSS_Halt(1);
-    }
+    check_kernel_mode(PHASE1_INIT_NAME);
 
-    // Disable interrupts
-    int old_psr = USLOSS_PsrGet();
-    USLOSS_PsrSet(USLOSS_PsrGet() & ~USLOSS_PSR_CURRENT_INT);
+    int old_psr = disable_interrupts();
 
     memset(process_table, 0, sizeof(process_table));
 
@@ -100,16 +117,9 @@ void phase1_init(void)
 
 int spork(char *name, int (*func)(void *), void *arg, int stacksize, int priority)
 {
-    // Checking kernel mode
-    if ((USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE) != 1)
-    {
-        USLOSS_Console("ERROR: Someone attempted to call spork while in user mode!\n");
-        USLOSS_Halt(1);
-    }
+    check_kernel_mode(SPORK_NAME);
 
-    // Disable interrupts
-    int old_psr = USLOSS_PsrGet();
-    USLOSS_PsrSet(USLOSS_PsrGet() & ~USLOSS_PSR_CURRENT_INT);
+    int old_psr = disable_interrupts();
 
     // Check parameters
     if (stacksize < USLOSS_MIN_STACK)
@@ -124,11 +134,11 @@ int spork(char *name, int (*func)(void *), void *arg, int stacksize, int priorit
     // Cycle through available slots to find a free one
     // Free: PID 0 or the state is TERMINATED_STATE
     int first_slot = next_pid % MAXPROC;
-    Process* new_process = &process_table[next_pid % MAXPROC];
-    while(new_process->pid != 0)
+    Process *new_process = &process_table[next_pid % MAXPROC];
+    while (new_process->pid != 0)
     {
         next_pid++;
-        if(next_pid % MAXPROC == first_slot)
+        if (next_pid % MAXPROC == first_slot)
             return -1; // No free slots
 
         new_process = &process_table[next_pid % MAXPROC];
@@ -157,16 +167,9 @@ int spork(char *name, int (*func)(void *), void *arg, int stacksize, int priorit
 
 int join(int *status)
 {
-    // Checking kernel mode
-    if ((USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE) == 0)
-    {
-        USLOSS_Console("ERROR: Someone attempted to call join while in user mode!\n");
-        USLOSS_Halt(1);
-    }
+    check_kernel_mode(JOIN_NAME);
 
-    // Disable interrupts
-    int old_psr = USLOSS_PsrGet();
-    USLOSS_PsrSet(USLOSS_PsrGet() & ~USLOSS_PSR_CURRENT_INT);
+    int old_psr = disable_interrupts();
 
     // if status pointer is null, return -3
     if (status == NULL)
@@ -177,7 +180,7 @@ int join(int *status)
         return -2;
 
     // Iterate through children to find any dead processes
-    Process* child = current_process->children;
+    Process *child = current_process->children;
     while (child != NULL)
     {
         if (child->state == TERMINATED_STATE)
@@ -221,19 +224,12 @@ int join(int *status)
 
 void quit_phase_1a(int status, int switchToPid)
 {
-    // Checking kernel mode
-    if ((USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE) == 0)
-    {
-        USLOSS_Console("ERROR: Someone attempted to call quit_phase_1a while in user mode!\n");
-        USLOSS_Halt(1);
-    }
+    check_kernel_mode(QUIT_NAME);
 
-    // Disable interrupts
-    int old_psr = USLOSS_PsrGet();
-    USLOSS_PsrSet(USLOSS_PsrGet() & ~USLOSS_PSR_CURRENT_INT);
+    int old_psr = disable_interrupts();
 
     // Check if the current process has any children
-    if(current_process->children != NULL)
+    if (current_process->children != NULL)
     {
         USLOSS_Console("ERROR: Process pid %d called quit() while it still had children.\n", current_process->pid);
         USLOSS_Halt(1);
@@ -261,35 +257,31 @@ int getpid(void)
 
 void dumpProcesses(void)
 {
-    // Checking kernel mode
-    if ((USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE) == 0)
-    {
-        USLOSS_Console("ERROR: Someone attempted to call dumpProcesses while in user mode!\n");
-        USLOSS_Halt(1);
-    }
+    check_kernel_mode(DUMP_PROCESSES_NAME);
 
-    // Disable interrupts
-    int old_psr = USLOSS_PsrGet();
-    USLOSS_PsrSet(USLOSS_PsrGet() & ~USLOSS_PSR_CURRENT_INT);
+    int old_psr = disable_interrupts();
 
     USLOSS_Console(" PID  PPID  NAME              PRIORITY  STATE\n");
 
-    for (int i = 0; i < MAXPROC; i++) {
+    for (int i = 0; i < MAXPROC; i++)
+    {
         Process *proc = &process_table[i];
-        if (proc->pid != 0) {
+        if (proc->pid != 0)
+        {
             char state[20];
-            switch (proc->state) {
-                case READY_STATE:
-                    strcpy(state, "Runnable");
-                    break;
-                case RUNNING_STATE:
-                    strcpy(state, "Running");
-                    break;
-                case TERMINATED_STATE:
-                    sprintf(state, "Terminated(%d)", proc->status);
-                    break;
-                default:
-                    strcpy(state, "Unknown");
+            switch (proc->state)
+            {
+            case READY_STATE:
+                strcpy(state, "Runnable");
+                break;
+            case RUNNING_STATE:
+                strcpy(state, "Running");
+                break;
+            case TERMINATED_STATE:
+                sprintf(state, "Terminated(%d)", proc->status);
+                break;
+            default:
+                strcpy(state, "Unknown");
             }
 
             USLOSS_Console(" %3d %5d  %-16s  %d         %s\n",
@@ -307,22 +299,16 @@ void dumpProcesses(void)
 
 void TEMP_switchTo(int pid)
 {
-    // Checking kernel mode
-    if ((USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE) == 0)
-    {
-        USLOSS_Console("ERROR: Someone attempted to call TEMP_switchTo while in user mode!\n");
-        USLOSS_Halt(1);
-    }
+    check_kernel_mode(TEMP_SWITCH_TO_NAME);
 
-    // Disable interrupts
-    int old_psr = USLOSS_PsrGet();
-    USLOSS_PsrSet(USLOSS_PsrGet() & ~USLOSS_PSR_CURRENT_INT);
+    int old_psr = disable_interrupts();
 
     Process *old = current_process;
     current_process = &process_table[pid % MAXPROC];
 
-    //Update states
-    if(pid != 1 && old->state != TERMINATED_STATE) old->state = READY_STATE;
+    // Update states
+    if (pid != 1 && old->state != TERMINATED_STATE)
+        old->state = READY_STATE;
     current_process->state = RUNNING_STATE;
 
     USLOSS_ContextSwitch(pid == 1 ? NULL : &(old->context), &(current_process->context));
