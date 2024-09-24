@@ -207,8 +207,10 @@ int join(int *status)
                 child->stack = NULL;
             }
 
-            // Return the child's PID
-            return child->pid;
+            // Return the child's PID and clear out the child's process table entry
+            int child_pid = child->pid;
+            memset(child, 0, sizeof(Process));
+            return child_pid;
         }
         child = child->next_sibling;
     }
