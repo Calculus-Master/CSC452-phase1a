@@ -6,5 +6,5 @@ phase5_start_service_processes() called -- currently a NOP
 Phase 1A TEMPORARY HACK: init() manually switching to testcase_main() after using spork() to create it.
 testcase_main(): started
 EXPECTATION: The simulation should be terminated as soon as spork() is called, since we are not in kernel mode.
-SIMULATOR TRAP: USLOSS_IntVec[USLOSS_ILLEGAL_INT] is NULL!
-
+ERROR: Someone attempted to call spork while in user mode!
+finish(): The simulation is now terminating.
